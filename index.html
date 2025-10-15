@@ -307,11 +307,56 @@
         }
 
         function handleAliceSeeBobFlip(sessionId, bobFlip) {
-            const aliceFlip = parseInt(sessionStorage.getItem(`session_${sessionId}_aliceFlip`));
+            const aliceFlip = sessionStorage.getItem(`session_${sessionId}_aliceFlip`);
             const aliceNumber = sessionStorage.getItem(`session_${sessionId}_aliceNumber`);
-            const finalFlip = xorFlips(aliceFlip, parseInt(bobFlip));
+
+            if (aliceFlip === null || aliceNumber === null) {
+                return `
+                    <h1>Session Data Not Found</h1>
+                    <p>Your coin flip partner has sent you their flip, but your original flip data is not available in this browser window.</p>
+                    <p>This can happen if you opened this link in a new window, tab, or private browsing session.</p>
+                    <h2>Option 1: Use your original window</h2>
+                    <p>Please copy this link and paste it into the browser window where you originally started the coin flip:</p>
+                    <p><code>${window.location.href}</code></p>
+                    <h2>Option 2: Enter your secret number</h2>
+                    <p>If you still have access to your secret number, enter it below:</p>
+                    <input type="text" id="aliceNumberInput" placeholder="Enter your 40-digit number" style="width: 100%; margin-bottom: 1rem;">
+                    <button onclick="continueWithNumber('${sessionId}', '${bobFlip}')">Continue</button>
+                    <div id="continueResult"></div>
+                `;
+            }
+
+            const finalFlip = xorFlips(parseInt(aliceFlip), parseInt(bobFlip));
 
             return `
+                <h1>Combined Result</h1>
+                <p>Your flip: ${flipToHtml(parseInt(aliceFlip))}</p>
+                <p>Your partner's flip: ${flipToHtml(parseInt(bobFlip))}</p>
+                <p>Combined result: ${flipToHtml(finalFlip)}</p>
+                <h2>Send this link back to your flip partner to reveal your number:</h2>
+                <p><a href="${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}">${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}</a></p>
+            `;
+        }
+
+        async function continueWithNumber(sessionId, bobFlip) {
+            const input = document.getElementById('aliceNumberInput');
+            const aliceNumber = input.value.trim();
+
+            if (aliceNumber.length !== 40 || !/^\d+$/.test(aliceNumber)) {
+                document.getElementById('continueResult').innerHTML = `<p style="color: red;">Please enter a valid 40-digit number.</p>`;
+                return;
+            }
+
+            const aliceFlip = getFlipFromNumber(aliceNumber);
+            const hash = await sha256(aliceNumber);
+
+            sessionStorage.setItem(`session_${sessionId}_aliceNumber`, aliceNumber);
+            sessionStorage.setItem(`session_${sessionId}_aliceFlip`, aliceFlip);
+            sessionStorage.setItem(`session_${sessionId}_hash`, hash);
+
+            const finalFlip = xorFlips(aliceFlip, parseInt(bobFlip));
+
+            document.getElementById('app').innerHTML = `
                 <h1>Combined Result</h1>
                 <p>Your flip: ${flipToHtml(aliceFlip)}</p>
                 <p>Your partner's flip: ${flipToHtml(parseInt(bobFlip))}</p>
@@ -323,6 +368,30 @@
 
         async function handleReveal(sessionId, aliceNumber) {
             const storedHash = sessionStorage.getItem(`session_${sessionId}_hash`);
+            const bobFlip = sessionStorage.getItem(`session_${sessionId}_bobFlip`);
+
+            if (storedHash === null || bobFlip === null) {
+                return `
+                    <h1>Session Data Not Found</h1>
+                    <p>Your coin flip partner has revealed their number, but your original session data is not available in this browser window.</p>
+                    <p>This can happen if you opened this link in a new window, tab, or private browsing session.</p>
+                    <h2>Option 1: Use your original window</h2>
+                    <p>Please copy this link and paste it into the browser window where you originally flipped the coin:</p>
+                    <p><code>${window.location.href}</code></p>
+                    <h2>Option 2: Enter your session information</h2>
+                    <p>If you still have access to your original session information, enter it below:</p>
+                    <label>Hash you received (SHA-256):</label>
+                    <input type="text" id="hashInput" placeholder="Enter hash" style="width: 100%; margin-bottom: 1rem;">
+                    <label>Your flip:</label>
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: inline-block; margin-right: 2rem;"><input type="radio" name="bobFlipChoice" value="0"> Heads</label>
+                        <label style="display: inline-block;"><input type="radio" name="bobFlipChoice" value="1"> Tails</label>
+                    </div>
+                    <button onclick="continueWithSessionInfo('${sessionId}', '${aliceNumber}')">Verify and Show Result</button>
+                    <div id="sessionInfoResult"></div>
+                `;
+            }
+
             const computedHash = await sha256(aliceNumber);
 
             if (storedHash !== computedHash) {
@@ -330,10 +399,48 @@
             }
 
             const aliceFlip = getFlipFromNumber(aliceNumber);
-            const bobFlip = parseInt(sessionStorage.getItem(`session_${sessionId}_bobFlip`));
-            const finalFlip = xorFlips(aliceFlip, bobFlip);
+            const finalFlip = xorFlips(aliceFlip, parseInt(bobFlip));
 
             return `
+                <h1>Final Result (Verified)</h1>
+                <p>Their number: ${aliceNumber}</p>
+                <p>✓ SHA256("${aliceNumber}") == ${computedHash}</p>
+                <p>Your partner's flip: ${flipToHtml(aliceFlip)}</p>
+                <p>Your flip: ${flipToHtml(parseInt(bobFlip))}</p>
+                <h2>Combined Result: ${flipToHtml(finalFlip)}</h2>
+            `;
+        }
+
+        async function continueWithSessionInfo(sessionId, aliceNumber) {
+            const hashInput = document.getElementById('hashInput');
+            const hash = hashInput.value.trim();
+            const bobFlipChoice = document.querySelector('input[name="bobFlipChoice"]:checked');
+
+            if (!hash || hash.length !== 64 || !/^[a-f0-9]+$/i.test(hash)) {
+                document.getElementById('sessionInfoResult').innerHTML = `<p style="color: red;">Please enter a valid SHA-256 hash (64 hexadecimal characters).</p>`;
+                return;
+            }
+
+            if (!bobFlipChoice) {
+                document.getElementById('sessionInfoResult').innerHTML = `<p style="color: red;">Please select your flip (Heads or Tails).</p>`;
+                return;
+            }
+
+            const bobFlip = parseInt(bobFlipChoice.value);
+            const computedHash = await sha256(aliceNumber);
+
+            if (hash !== computedHash) {
+                document.getElementById('sessionInfoResult').innerHTML = `<p style="color: red;">VERIFICATION FAILED! The number doesn't match the committed hash.</p>`;
+                return;
+            }
+
+            sessionStorage.setItem(`session_${sessionId}_hash`, hash);
+            sessionStorage.setItem(`session_${sessionId}_bobFlip`, bobFlip);
+
+            const aliceFlip = getFlipFromNumber(aliceNumber);
+            const finalFlip = xorFlips(aliceFlip, bobFlip);
+
+            document.getElementById('app').innerHTML = `
                 <h1>Final Result (Verified)</h1>
                 <p>Their number: ${aliceNumber}</p>
                 <p>✓ SHA256("${aliceNumber}") == ${computedHash}</p>
@@ -360,6 +467,8 @@
 
         window.bobFlip = bobFlip;
         window.startCoinFlip = startCoinFlip;
+        window.continueWithNumber = continueWithNumber;
+        window.continueWithSessionInfo = continueWithSessionInfo;
         window.addEventListener('hashchange', render);
         render();
     </script>
