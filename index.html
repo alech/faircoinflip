@@ -259,7 +259,7 @@
                 <p>SHA256("${aliceNumber}") = ${hash}</p>
                 <h2>Send this link to your coin flip partner:</h2>
                 <p><a href="${bobUrl}">${bobUrl}</a></p>
-                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coin photos: ${attribution}</p>` : ''}
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coins: ${attribution}</p>` : ''}
             `;
         }
 
@@ -294,7 +294,7 @@
                 <p>Your coin flip partner has committed to their flip with the SHA256 hash: ${hash}</p>
                 <button onclick="bobFlip('${sessionId}', '${coinNum}')">Flip Coin</button>
                 <div id="bobResult" style="margin-top: 2rem;"></div>
-                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coin photos: ${attribution}</p>` : ''}
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coins: ${attribution}</p>` : ''}
             `;
         }
 
@@ -385,7 +385,7 @@
                 <p>Combined result: ${flipToHtml(finalFlip, coinNum)}</p>
                 <h2>Send this link back to your flip partner to reveal your number:</h2>
                 <p><a href="${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}&coinNum=${coinNum}">${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}&coinNum=${coinNum}</a></p>
-                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coin photos: ${attribution}</p>` : ''}
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coins: ${attribution}</p>` : ''}
             `;
         }
 
@@ -432,7 +432,7 @@
                 <p>Your partner's flip: ${flipToHtml(aliceFlip, coinNum)}</p>
                 <p>Your flip: ${flipToHtml(parseInt(bobFlip), coinNum)}</p>
                 <h2>Combined Result: ${flipToHtml(finalFlip, coinNum)}</h2>
-                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coin photos: ${attribution}</p>` : ''}
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coins: ${attribution}</p>` : ''}
             `;
         }
 
@@ -473,7 +473,7 @@
                 <p>Your partner's flip: ${flipToHtml(aliceFlip, coinNum)}</p>
                 <p>Your flip: ${flipToHtml(bobFlip, coinNum)}</p>
                 <h2>Combined Result: ${flipToHtml(finalFlip, coinNum)}</h2>
-                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coin photos: ${attribution}</p>` : ''}
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coins: ${attribution}</p>` : ''}
             `;
         }
 
