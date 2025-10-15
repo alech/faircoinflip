@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fair Coin Flip</title>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        const HEADS = 0;
+        const TAILS = 1;
+
+        function generateSessionId() {
+            return Math.random().toString(36).substring(2, 15);
+        }
+
+        function secureCoinFlip() {
+            const array = new Uint8Array(1);
+            crypto.getRandomValues(array);
+            return array[0] % 2;
+        }
+
+        function generateRandomNumber() {
+            const array = new Uint8Array(40);
+            crypto.getRandomValues(array);
+            
+            let number = '';
+            number += (array[0] % 9) + 1; // First digit 1-9
+            for (let i = 1; i < 40; i++) {
+                number += array[i] % 10;
+            }
+            return number;
+        }
+
+        function setLastDigitByCoinFlip(number, flip) {
+            const numStr = number.substring(0, 39);
+            const lastDigit = flip === HEADS ? 0 : 1; // Even for heads, odd for tails
+            return numStr + lastDigit;
+        }
+
+        function getFlipFromNumber(number) {
+            const lastDigit = parseInt(number.charAt(39));
+            return lastDigit % 2 === 0 ? HEADS : TAILS;
+        }
+
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function xorFlips(flip1, flip2) {
+            return flip1 === flip2 ? HEADS : TAILS;
+        }
+
+        function flipToString(flip) {
+            return flip === HEADS ? 'HEADS' : 'TAILS';
+        }
+
+        function parseUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                sessionId: params.get('session'),
+                hash: params.get('hash'),
+                bobFlip: params.get('bobFlip'),
+                aliceNumber: params.get('aliceNumber')
+            };
+        }
+
+        async function initAlice() {
+            const sessionId = generateSessionId();
+            const aliceFlip = secureCoinFlip();
+            let aliceNumber = generateRandomNumber();
+            aliceNumber = setLastDigitByCoinFlip(aliceNumber, aliceFlip);
+            const hash = await sha256(aliceNumber);
+
+            sessionStorage.setItem(`session_${sessionId}_aliceNumber`, aliceNumber);
+            sessionStorage.setItem(`session_${sessionId}_aliceFlip`, aliceFlip);
+            sessionStorage.setItem(`session_${sessionId}_hash`, hash);
+
+            const bobUrl = `${window.location.origin}${window.location.pathname}?session=${sessionId}&hash=${hash}`;
+
+            return `
+                <h1>Alice's Coin Flip</h1>
+                <p>Your flip: <strong>${flipToString(aliceFlip)}</strong></p>
+                <p>Your secret number: ${aliceNumber}</p>
+                <p>Hash: ${hash}</p>
+                <h2>Send this link to Bob:</h2>
+                <p><a href="${bobUrl}">${bobUrl}</a></p>
+            `;
+        }
+
+        function handleBob(sessionId, hash) {
+            sessionStorage.setItem(`session_${sessionId}_hash`, hash);
+
+            return `
+                <h1>Bob's Turn</h1>
+                <p>Alice has committed to a flip with hash: ${hash}</p>
+                <button onclick="bobFlip('${sessionId}')">Flip Coin</button>
+                <div id="bobResult"></div>
+            `;
+        }
+
+        function bobFlip(sessionId) {
+            const bobFlipValue = secureCoinFlip();
+
+            sessionStorage.setItem(`session_${sessionId}_bobFlip`, bobFlipValue);
+
+            const aliceUrl = `${window.location.origin}${window.location.pathname}?session=${sessionId}&bobFlip=${bobFlipValue}`;
+
+            document.getElementById('bobResult').innerHTML = `
+                <p>Your flip: <strong>${flipToString(bobFlipValue)}</strong></p>
+                <h2>Send this link to Alice:</h2>
+                <p><a href="${aliceUrl}">${aliceUrl}</a></p>
+            `;
+        }
+
+        function handleAliceSeeBobFlip(sessionId, bobFlip) {
+            const aliceFlip = parseInt(sessionStorage.getItem(`session_${sessionId}_aliceFlip`));
+            const aliceNumber = sessionStorage.getItem(`session_${sessionId}_aliceNumber`);
+            const finalFlip = xorFlips(aliceFlip, parseInt(bobFlip));
+
+            return `
+                <h1>Alice: Combined Result</h1>
+                <p>Your flip: <strong>${flipToString(aliceFlip)}</strong></p>
+                <p>Bob's flip: <strong>${flipToString(parseInt(bobFlip))}</strong></p>
+                <p>Combined result: <strong>${flipToString(finalFlip)}</strong></p>
+                <h2>Send this link back to Bob to reveal your number:</h2>
+                <p><a href="${window.location.origin}${window.location.pathname}?session=${sessionId}&aliceNumber=${aliceNumber}">${window.location.origin}${window.location.pathname}?session=${sessionId}&aliceNumber=${aliceNumber}</a></p>
+            `;
+        }
+
+        async function handleReveal(sessionId, aliceNumber) {
+            const storedHash = sessionStorage.getItem(`session_${sessionId}_hash`);
+            const computedHash = await sha256(aliceNumber);
+
+            if (storedHash !== computedHash) {
+                return `<h1>VERIFICATION FAILED!</h1><p>The number doesn't match the committed hash.</p>`;
+            }
+
+            const aliceFlip = getFlipFromNumber(aliceNumber);
+            const bobFlip = parseInt(sessionStorage.getItem(`session_${sessionId}_bobFlip`));
+            const finalFlip = xorFlips(aliceFlip, bobFlip);
+
+            return `
+                <h1>Bob: Final Result (Verified)</h1>
+                <p>✓ Hash verified successfully!</p>
+                <p>Alice's flip: <strong>${flipToString(aliceFlip)}</strong></p>
+                <p>Alice's number: ${aliceNumber}</p>
+                <p>Your flip: <strong>${flipToString(bobFlip)}</strong></p>
+                <h2>Combined Result: <strong>${flipToString(finalFlip)}</strong></h2>
+            `;
+        }
+
+        async function render() {
+            const params = parseUrlParams();
+            const app = document.getElementById('app');
+
+            if (params.aliceNumber && params.sessionId) {
+                app.innerHTML = await handleReveal(params.sessionId, params.aliceNumber);
+            } else if (params.bobFlip && params.sessionId) {
+                app.innerHTML = handleAliceSeeBobFlip(params.sessionId, params.bobFlip);
+            } else if (params.sessionId && params.hash) {
+                app.innerHTML = handleBob(params.sessionId, params.hash);
+            } else {
+                app.innerHTML = await initAlice();
+            }
+        }
+
+        window.bobFlip = bobFlip;
+        render();
+    </script>
+</body>
+</html>
