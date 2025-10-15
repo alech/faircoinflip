@@ -61,7 +61,8 @@
         }
 
         function parseUrlParams() {
-            const params = new URLSearchParams(window.location.search);
+            const hashParams = window.location.hash.substring(1);
+            const params = new URLSearchParams(hashParams);
             return {
                 sessionId: params.get('session'),
                 hash: params.get('hash'),
@@ -81,7 +82,7 @@
             sessionStorage.setItem(`session_${sessionId}_aliceFlip`, aliceFlip);
             sessionStorage.setItem(`session_${sessionId}_hash`, hash);
 
-            const bobUrl = `${window.location.origin}${window.location.pathname}?session=${sessionId}&hash=${hash}`;
+            const bobUrl = `${window.location.origin}${window.location.pathname}#session=${sessionId}&hash=${hash}`;
 
             return `
                 <h1>Alice's Coin Flip</h1>
@@ -109,7 +110,7 @@
 
             sessionStorage.setItem(`session_${sessionId}_bobFlip`, bobFlipValue);
 
-            const aliceUrl = `${window.location.origin}${window.location.pathname}?session=${sessionId}&bobFlip=${bobFlipValue}`;
+            const aliceUrl = `${window.location.origin}${window.location.pathname}#session=${sessionId}&bobFlip=${bobFlipValue}`;
 
             document.getElementById('bobResult').innerHTML = `
                 <p>Your flip: <strong>${flipToString(bobFlipValue)}</strong></p>
@@ -129,7 +130,7 @@
                 <p>Bob's flip: <strong>${flipToString(parseInt(bobFlip))}</strong></p>
                 <p>Combined result: <strong>${flipToString(finalFlip)}</strong></p>
                 <h2>Send this link back to Bob to reveal your number:</h2>
-                <p><a href="${window.location.origin}${window.location.pathname}?session=${sessionId}&aliceNumber=${aliceNumber}">${window.location.origin}${window.location.pathname}?session=${sessionId}&aliceNumber=${aliceNumber}</a></p>
+                <p><a href="${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}">${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}</a></p>
             `;
         }
 
@@ -171,6 +172,7 @@
         }
 
         window.bobFlip = bobFlip;
+        window.addEventListener('hashchange', render);
         render();
     </script>
 </body>
