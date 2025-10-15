@@ -139,33 +139,33 @@
             return flip === HEADS ? 'HEADS' : 'TAILS';
         }
 
-        function flipToHtml(flip, animated = false) {
+        function flipToHtml(flip, coinNum, animated = false) {
             const label = flipToString(flip);
-            const img = flip === HEADS ? 'img/heads.png' : 'img/tails.png';
+            const img = flip === HEADS ? `img/heads${coinNum}.png` : `img/tails${coinNum}.png`;
             const animClass = animated ? 'coin-flip' : '';
             return `<img src="${img}" alt="${label}" class="${animClass}" style="height: 3rem; vertical-align: middle;"> <strong>${label}</strong>`;
         }
 
-        function showFlippingCoin() {
+        function showFlippingCoin(coinNum) {
             return `
                 <div class="coin-container">
                     <div class="coin-flip">
-                        <img src="img/heads.png" alt="Heads" class="heads-side">
-                        <img src="img/tails.png" alt="Tails" class="tails-side">
+                        <img src="img/heads${coinNum}.png" alt="Heads" class="heads-side">
+                        <img src="img/tails${coinNum}.png" alt="Tails" class="tails-side">
                     </div>
                 </div>
                 <strong>Flipping...</strong>
             `;
         }
 
-        function showFullscreenFlippingCoin(result) {
+        function showFullscreenFlippingCoin(result, coinNum) {
             const animClass = result === HEADS ? 'coin-flip-heads' : 'coin-flip-tails';
             return `
                 <div class="fullscreen-flip">
                     <div class="coin-container">
                         <div class="coin-flip ${animClass}">
-                            <img src="img/heads.png" alt="Heads" class="heads-side">
-                            <img src="img/tails.png" alt="Tails" class="tails-side">
+                            <img src="img/heads${coinNum}.png" alt="Heads" class="heads-side">
+                            <img src="img/tails${coinNum}.png" alt="Tails" class="tails-side">
                         </div>
                     </div>
                 </div>
@@ -179,8 +179,22 @@
                 sessionId: params.get('session'),
                 hash: params.get('hash'),
                 bobFlip: params.get('bobFlip'),
-                aliceNumber: params.get('aliceNumber')
+                aliceNumber: params.get('aliceNumber'),
+                coinNum: params.get('coinNum') || '1'
             };
+        }
+
+        function getRandomCoinNum() {
+            return Math.random() < 0.5 ? '1' : '2';
+        }
+
+        async function loadCoinAttribution(coinNum) {
+            try {
+                const response = await fetch(`img/${coinNum}-attribution.html`);
+                return await response.text();
+            } catch (e) {
+                return '';
+            }
         }
 
         function showLanding() {
@@ -225,7 +239,7 @@
             `;
         }
 
-        async function initAliceWithFlip(aliceFlip) {
+        async function initAliceWithFlip(aliceFlip, coinNum) {
             const sessionId = generateSessionId();
             let aliceNumber = generateRandomNumber();
             aliceNumber = setLastDigitByCoinFlip(aliceNumber, aliceFlip);
@@ -235,28 +249,31 @@
             sessionStorage.setItem(`session_${sessionId}_aliceFlip`, aliceFlip);
             sessionStorage.setItem(`session_${sessionId}_hash`, hash);
 
-            const bobUrl = `${window.location.origin}${window.location.pathname}#session=${sessionId}&hash=${hash}`;
+            const bobUrl = `${window.location.origin}${window.location.pathname}#session=${sessionId}&hash=${hash}&coinNum=${coinNum}`;
+            const attribution = await loadCoinAttribution(coinNum);
 
             return `
                 <h1>Your Coin Flip</h1>
-                <p>Your flip: ${flipToHtml(aliceFlip)}</p>
+                <p>Your flip: ${flipToHtml(aliceFlip, coinNum)}</p>
                 <p>Your secret number: ${aliceNumber}</p>
                 <p>SHA256("${aliceNumber}") = ${hash}</p>
                 <h2>Send this link to your coin flip partner:</h2>
                 <p><a href="${bobUrl}">${bobUrl}</a></p>
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coin photos: ${attribution}</p>` : ''}
             `;
         }
 
         async function startCoinFlip() {
             const aliceFlip = secureCoinFlip();
+            const coinNum = getRandomCoinNum();
             
-            document.body.insertAdjacentHTML('beforeend', showFullscreenFlippingCoin(aliceFlip));
+            document.body.insertAdjacentHTML('beforeend', showFullscreenFlippingCoin(aliceFlip, coinNum));
             
             await new Promise(resolve => setTimeout(resolve, 5000));
             
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            const content = await initAliceWithFlip(aliceFlip);
+            const content = await initAliceWithFlip(aliceFlip, coinNum);
             document.getElementById('app').innerHTML = content;
             
             const flipElement = document.querySelector('.fullscreen-flip');
@@ -267,22 +284,24 @@
             }
         }
 
-        function handleBob(sessionId, hash) {
+        async function handleBob(sessionId, hash, coinNum) {
             sessionStorage.setItem(`session_${sessionId}_hash`, hash);
+            const attribution = await loadCoinAttribution(coinNum);
 
             return `
                 <h1>Fair Coin Flip</h1>
                 <p>You have been invited to participate in a cryptographic fair coin flip protocol.</p>
                 <p>Your coin flip partner has committed to their flip with the SHA256 hash: ${hash}</p>
-                <button onclick="bobFlip('${sessionId}')">Flip Coin</button>
+                <button onclick="bobFlip('${sessionId}', '${coinNum}')">Flip Coin</button>
                 <div id="bobResult" style="margin-top: 2rem;"></div>
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coin photos: ${attribution}</p>` : ''}
             `;
         }
 
-        async function bobFlip(sessionId) {
+        async function bobFlip(sessionId, coinNum) {
             const bobFlipValue = secureCoinFlip();
             
-            document.body.insertAdjacentHTML('beforeend', showFullscreenFlippingCoin(bobFlipValue));
+            document.body.insertAdjacentHTML('beforeend', showFullscreenFlippingCoin(bobFlipValue, coinNum));
 
             await new Promise(resolve => setTimeout(resolve, 5000));
             
@@ -290,10 +309,10 @@
             
             sessionStorage.setItem(`session_${sessionId}_bobFlip`, bobFlipValue);
 
-            const aliceUrl = `${window.location.origin}${window.location.pathname}#session=${sessionId}&bobFlip=${bobFlipValue}`;
+            const aliceUrl = `${window.location.origin}${window.location.pathname}#session=${sessionId}&bobFlip=${bobFlipValue}&coinNum=${coinNum}`;
 
             document.getElementById('bobResult').innerHTML = `
-                <p>Your flip: ${flipToHtml(bobFlipValue)}</p>
+                <p>Your flip: ${flipToHtml(bobFlipValue, coinNum)}</p>
                 <h2>Send this link back to your coin flip partner:</h2>
                 <p><a href="${aliceUrl}">${aliceUrl}</a></p>
             `;
@@ -306,7 +325,7 @@
             }
         }
 
-        function handleAliceSeeBobFlip(sessionId, bobFlip) {
+        async function handleAliceSeeBobFlip(sessionId, bobFlip, coinNum) {
             const aliceFlip = sessionStorage.getItem(`session_${sessionId}_aliceFlip`);
             const aliceNumber = sessionStorage.getItem(`session_${sessionId}_aliceNumber`);
 
@@ -321,24 +340,26 @@
                     <h2>Option 2: Enter your secret number</h2>
                     <p>If you still have access to your secret number, enter it below:</p>
                     <input type="text" id="aliceNumberInput" placeholder="Enter your 40-digit number" style="width: 100%; margin-bottom: 1rem;">
-                    <button onclick="continueWithNumber('${sessionId}', '${bobFlip}')">Continue</button>
+                    <button onclick="continueWithNumber('${sessionId}', '${bobFlip}', '${coinNum}')">Continue</button>
                     <div id="continueResult"></div>
                 `;
             }
 
             const finalFlip = xorFlips(parseInt(aliceFlip), parseInt(bobFlip));
+            const attribution = await loadCoinAttribution(coinNum);
 
             return `
                 <h1>Combined Result</h1>
-                <p>Your flip: ${flipToHtml(parseInt(aliceFlip))}</p>
-                <p>Your partner's flip: ${flipToHtml(parseInt(bobFlip))}</p>
-                <p>Combined result: ${flipToHtml(finalFlip)}</p>
+                <p>Your flip: ${flipToHtml(parseInt(aliceFlip), coinNum)}</p>
+                <p>Your partner's flip: ${flipToHtml(parseInt(bobFlip), coinNum)}</p>
+                <p>Combined result: ${flipToHtml(finalFlip, coinNum)}</p>
                 <h2>Send this link back to your flip partner to reveal your number:</h2>
-                <p><a href="${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}">${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}</a></p>
+                <p><a href="${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}&coinNum=${coinNum}">${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}&coinNum=${coinNum}</a></p>
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coins: ${attribution}</p>` : ''}
             `;
         }
 
-        async function continueWithNumber(sessionId, bobFlip) {
+        async function continueWithNumber(sessionId, bobFlip, coinNum) {
             const input = document.getElementById('aliceNumberInput');
             const aliceNumber = input.value.trim();
 
@@ -355,18 +376,20 @@
             sessionStorage.setItem(`session_${sessionId}_hash`, hash);
 
             const finalFlip = xorFlips(aliceFlip, parseInt(bobFlip));
+            const attribution = await loadCoinAttribution(coinNum);
 
             document.getElementById('app').innerHTML = `
                 <h1>Combined Result</h1>
-                <p>Your flip: ${flipToHtml(aliceFlip)}</p>
-                <p>Your partner's flip: ${flipToHtml(parseInt(bobFlip))}</p>
-                <p>Combined result: ${flipToHtml(finalFlip)}</p>
+                <p>Your flip: ${flipToHtml(aliceFlip, coinNum)}</p>
+                <p>Your partner's flip: ${flipToHtml(parseInt(bobFlip), coinNum)}</p>
+                <p>Combined result: ${flipToHtml(finalFlip, coinNum)}</p>
                 <h2>Send this link back to your flip partner to reveal your number:</h2>
-                <p><a href="${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}">${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}</a></p>
+                <p><a href="${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}&coinNum=${coinNum}">${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}&coinNum=${coinNum}</a></p>
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coin photos: ${attribution}</p>` : ''}
             `;
         }
 
-        async function handleReveal(sessionId, aliceNumber) {
+        async function handleReveal(sessionId, aliceNumber, coinNum) {
             const storedHash = sessionStorage.getItem(`session_${sessionId}_hash`);
             const bobFlip = sessionStorage.getItem(`session_${sessionId}_bobFlip`);
 
@@ -387,7 +410,7 @@
                         <label style="display: inline-block; margin-right: 2rem;"><input type="radio" name="bobFlipChoice" value="0"> Heads</label>
                         <label style="display: inline-block;"><input type="radio" name="bobFlipChoice" value="1"> Tails</label>
                     </div>
-                    <button onclick="continueWithSessionInfo('${sessionId}', '${aliceNumber}')">Verify and Show Result</button>
+                    <button onclick="continueWithSessionInfo('${sessionId}', '${aliceNumber}', '${coinNum}')">Verify and Show Result</button>
                     <div id="sessionInfoResult"></div>
                 `;
             }
@@ -400,18 +423,20 @@
 
             const aliceFlip = getFlipFromNumber(aliceNumber);
             const finalFlip = xorFlips(aliceFlip, parseInt(bobFlip));
+            const attribution = await loadCoinAttribution(coinNum);
 
             return `
                 <h1>Final Result (Verified)</h1>
                 <p>Their number: ${aliceNumber}</p>
                 <p>✓ SHA256("${aliceNumber}") == ${computedHash}</p>
-                <p>Your partner's flip: ${flipToHtml(aliceFlip)}</p>
-                <p>Your flip: ${flipToHtml(parseInt(bobFlip))}</p>
-                <h2>Combined Result: ${flipToHtml(finalFlip)}</h2>
+                <p>Your partner's flip: ${flipToHtml(aliceFlip, coinNum)}</p>
+                <p>Your flip: ${flipToHtml(parseInt(bobFlip), coinNum)}</p>
+                <h2>Combined Result: ${flipToHtml(finalFlip, coinNum)}</h2>
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coin photos: ${attribution}</p>` : ''}
             `;
         }
 
-        async function continueWithSessionInfo(sessionId, aliceNumber) {
+        async function continueWithSessionInfo(sessionId, aliceNumber, coinNum) {
             const hashInput = document.getElementById('hashInput');
             const hash = hashInput.value.trim();
             const bobFlipChoice = document.querySelector('input[name="bobFlipChoice"]:checked');
@@ -439,14 +464,16 @@
 
             const aliceFlip = getFlipFromNumber(aliceNumber);
             const finalFlip = xorFlips(aliceFlip, bobFlip);
+            const attribution = await loadCoinAttribution(coinNum);
 
             document.getElementById('app').innerHTML = `
                 <h1>Final Result (Verified)</h1>
                 <p>Their number: ${aliceNumber}</p>
                 <p>✓ SHA256("${aliceNumber}") == ${computedHash}</p>
-                <p>Your partner's flip: ${flipToHtml(aliceFlip)}</p>
-                <p>Your flip: ${flipToHtml(bobFlip)}</p>
-                <h2>Combined Result: ${flipToHtml(finalFlip)}</h2>
+                <p>Your partner's flip: ${flipToHtml(aliceFlip, coinNum)}</p>
+                <p>Your flip: ${flipToHtml(bobFlip, coinNum)}</p>
+                <h2>Combined Result: ${flipToHtml(finalFlip, coinNum)}</h2>
+                ${attribution ? `<p style="margin-top: 2rem; font-size: 0.9rem; color: #666;">Coin photos: ${attribution}</p>` : ''}
             `;
         }
 
@@ -455,11 +482,11 @@
             const app = document.getElementById('app');
 
             if (params.aliceNumber && params.sessionId) {
-                app.innerHTML = await handleReveal(params.sessionId, params.aliceNumber);
+                app.innerHTML = await handleReveal(params.sessionId, params.aliceNumber, params.coinNum);
             } else if (params.bobFlip && params.sessionId) {
-                app.innerHTML = handleAliceSeeBobFlip(params.sessionId, params.bobFlip);
+                app.innerHTML = await handleAliceSeeBobFlip(params.sessionId, params.bobFlip, params.coinNum);
             } else if (params.sessionId && params.hash) {
-                app.innerHTML = handleBob(params.sessionId, params.hash);
+                app.innerHTML = await handleBob(params.sessionId, params.hash, params.coinNum);
             } else {
                 app.innerHTML = showLanding();
             }
