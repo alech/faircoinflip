@@ -3,10 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/pico.min.css">
     <title>Fair Coin Flip</title>
+    <style>
+        body { padding-top: 1rem; }
+    </style>
 </head>
 <body>
-    <div id="app"></div>
+    <div class="container-fluid">
+        <div id="app"></div>
+    </div>
 
     <script>
         const HEADS = 0;
@@ -60,6 +66,12 @@
             return flip === HEADS ? 'HEADS' : 'TAILS';
         }
 
+        function flipToHtml(flip) {
+            const label = flipToString(flip);
+            const img = flip === HEADS ? 'img/heads.png' : 'img/tails.png';
+            return `<img src="${img}" alt="${label}" style="height: 3rem; vertical-align: middle;"> <strong>${label}</strong>`;
+        }
+
         function parseUrlParams() {
             const hashParams = window.location.hash.substring(1);
             const params = new URLSearchParams(hashParams);
@@ -69,6 +81,25 @@
                 bobFlip: params.get('bobFlip'),
                 aliceNumber: params.get('aliceNumber')
             };
+        }
+
+        function showLanding() {
+            return `
+                <h1>Cryptographic Fair Coin Flip</h1>
+                <p>Nearly 25 years ago, I picked up a copy of <a href="https://www.schneier.com/books/applied-cryptography">Applied Cryptography</a>
+                    by Bruce Schneier. One of the parts I liked most was that there were a lot of fun, unusual protocols which go way beyond the
+                    <i>usual</i> usage of cryptography (encryption, signing, hashing, etc.).
+                </p>
+                <p>One of these is the fair coin flip protocol, here is how it works:</p>
+                <ol>
+                    <li>Alice flips a coin, represents it as a large number (even = heads, odd = tails) and commits to it using a cryptographic hash</li>
+                    <li>Bob receives the hash and flips their own coin and sends their flip to Alice</li>
+                    <li>Alice reveals their original flip</li>
+                    <li>Bob can now verify that Alice's original flip number hashes to the hash they received, which means Alice cannot cheat</li>
+                    <li>Both flips are combined using XOR to produce the final result</li>
+                </ol>
+                <button onclick="startCoinFlip()">Start Fair Coin Flip</button>
+            `;
         }
 
         async function initAlice() {
@@ -85,23 +116,29 @@
             const bobUrl = `${window.location.origin}${window.location.pathname}#session=${sessionId}&hash=${hash}`;
 
             return `
-                <h1>Alice's Coin Flip</h1>
-                <p>Your flip: <strong>${flipToString(aliceFlip)}</strong></p>
+                <h1>Your Coin Flip</h1>
+                <p>Your flip: ${flipToHtml(aliceFlip)}</p>
                 <p>Your secret number: ${aliceNumber}</p>
-                <p>Hash: ${hash}</p>
-                <h2>Send this link to Bob:</h2>
+                <p>SHA256(${aliceNumber}) = ${hash}</p>
+                <h2>Send this link to your coin flip partner:</h2>
                 <p><a href="${bobUrl}">${bobUrl}</a></p>
             `;
+        }
+
+        async function startCoinFlip() {
+            const content = await initAlice();
+            document.getElementById('app').innerHTML = content;
         }
 
         function handleBob(sessionId, hash) {
             sessionStorage.setItem(`session_${sessionId}_hash`, hash);
 
             return `
-                <h1>Bob's Turn</h1>
-                <p>Alice has committed to a flip with hash: ${hash}</p>
+                <h1>Fair Coin Flip</h1>
+                <p>You have been invited to participate in a cryptographic fair coin flip protocol.</p>
+                <p>Your coin flip partner has committed to their flip with the SHA256 hash: ${hash}</p>
                 <button onclick="bobFlip('${sessionId}')">Flip Coin</button>
-                <div id="bobResult"></div>
+                <div id="bobResult" style="margin-top: 2rem;"></div>
             `;
         }
 
@@ -113,8 +150,8 @@
             const aliceUrl = `${window.location.origin}${window.location.pathname}#session=${sessionId}&bobFlip=${bobFlipValue}`;
 
             document.getElementById('bobResult').innerHTML = `
-                <p>Your flip: <strong>${flipToString(bobFlipValue)}</strong></p>
-                <h2>Send this link to Alice:</h2>
+                <p>Your flip: ${flipToHtml(bobFlipValue)}</p>
+                <h2>Send this link back to your coin flip partner:</h2>
                 <p><a href="${aliceUrl}">${aliceUrl}</a></p>
             `;
         }
@@ -125,11 +162,11 @@
             const finalFlip = xorFlips(aliceFlip, parseInt(bobFlip));
 
             return `
-                <h1>Alice: Combined Result</h1>
-                <p>Your flip: <strong>${flipToString(aliceFlip)}</strong></p>
-                <p>Bob's flip: <strong>${flipToString(parseInt(bobFlip))}</strong></p>
-                <p>Combined result: <strong>${flipToString(finalFlip)}</strong></p>
-                <h2>Send this link back to Bob to reveal your number:</h2>
+                <h1>Combined Result</h1>
+                <p>Your flip: ${flipToHtml(aliceFlip)}</p>
+                <p>Your partner's flip: ${flipToHtml(parseInt(bobFlip))}</p>
+                <p>Combined result: ${flipToHtml(finalFlip)}</p>
+                <h2>Send this link back to your flip partner to reveal your number:</h2>
                 <p><a href="${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}">${window.location.origin}${window.location.pathname}#session=${sessionId}&aliceNumber=${aliceNumber}</a></p>
             `;
         }
@@ -139,7 +176,7 @@
             const computedHash = await sha256(aliceNumber);
 
             if (storedHash !== computedHash) {
-                return `<h1>VERIFICATION FAILED!</h1><p>The number doesn't match the committed hash.</p>`;
+                return `<h1>VERIFICATION FAILED!</h1><p>The number doesn't match the committed hash. Your partner may be trying to cheat!</p>`;
             }
 
             const aliceFlip = getFlipFromNumber(aliceNumber);
@@ -147,12 +184,12 @@
             const finalFlip = xorFlips(aliceFlip, bobFlip);
 
             return `
-                <h1>Bob: Final Result (Verified)</h1>
-                <p>✓ Hash verified successfully!</p>
-                <p>Alice's flip: <strong>${flipToString(aliceFlip)}</strong></p>
-                <p>Alice's number: ${aliceNumber}</p>
-                <p>Your flip: <strong>${flipToString(bobFlip)}</strong></p>
-                <h2>Combined Result: <strong>${flipToString(finalFlip)}</strong></h2>
+                <h1>Final Result (Verified)</h1>
+                <p>✓ SHA256(${aliceNumber}) == ${computedHash}</p>
+                <p>Your partner's flip: ${flipToHtml(aliceFlip)}</p>
+                <p>Their number: ${aliceNumber}</p>
+                <p>Your flip: ${flipToHtml(bobFlip)}</p>
+                <h2>Combined Result: ${flipToHtml(finalFlip)}</h2>
             `;
         }
 
@@ -167,11 +204,12 @@
             } else if (params.sessionId && params.hash) {
                 app.innerHTML = handleBob(params.sessionId, params.hash);
             } else {
-                app.innerHTML = await initAlice();
+                app.innerHTML = showLanding();
             }
         }
 
         window.bobFlip = bobFlip;
+        window.startCoinFlip = startCoinFlip;
         window.addEventListener('hashchange', render);
         render();
     </script>
